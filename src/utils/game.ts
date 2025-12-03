@@ -1,4 +1,4 @@
-import { Team, MIN_CARD, MAX_CARD } from '../types';
+import { MIN_CARD, MAX_CARD } from '../types';
 
 /**
  * Calculates the Net Profit (Score) based on Minus Auction rules.
@@ -8,27 +8,21 @@ import { Team, MIN_CARD, MAX_CARD } from '../types';
 export const calculateScore = (cards: number[], chips: number): number => {
   if (cards.length === 0) return chips;
 
-  // Sort ascending (e.g. -50, -49, -30)
   const sorted = [...cards].sort((a, b) => a - b);
-  
+
   let projectLossSum = 0;
   let currentSequenceHead = sorted[0];
 
   for (let i = 1; i < sorted.length; i++) {
-    // If current project is consecutive to the previous one
     if (sorted[i] === sorted[i - 1] + 1) {
       // Continue sequence
     } else {
-      // Sequence break. Add the previous sequence head to sum.
       projectLossSum += currentSequenceHead;
-      // Start new sequence
       currentSequenceHead = sorted[i];
     }
   }
-  // Add the last sequence head
   projectLossSum += currentSequenceHead;
 
-  // Final Score = Project Losses + Resources
   return projectLossSum + chips;
 };
 

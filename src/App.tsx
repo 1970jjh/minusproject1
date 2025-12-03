@@ -1,35 +1,33 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { 
-  GameState, 
-  GamePhase, 
-  Team, 
-  STARTING_CHIPS, 
+import { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  GameState,
+  GamePhase,
+  Team,
+  STARTING_CHIPS,
   NetworkMessage,
   MIN_TEAMS,
   MAX_TEAMS_LIMIT,
-  TeamMember
 } from './types';
-import { 
-  createDeck, 
+import {
+  createDeck,
   calculateScore,
-  generateId 
+  generateId
 } from './utils/game';
 import { PlayerPanel } from './components/PlayerPanel';
 import { Card } from './components/Card';
 import { Chip } from './components/Chip';
-import { 
-  Trophy, 
-  History, 
-  Users, 
-  Monitor, 
-  Smartphone, 
-  Briefcase, 
-  AlertTriangle, 
+import {
+  Trophy,
+  History,
+  Users,
+  Monitor,
+  Smartphone,
+  Briefcase,
+  AlertTriangle,
   Lock,
   Play,
   Settings,
   X,
-  LayoutDashboard,
   CheckCircle2,
   LogOut,
   Eye
@@ -38,30 +36,24 @@ import {
 const CHANNEL_NAME = 'minus_auction_corporate_v1';
 const ADMIN_PASSWORD = '6749467';
 
-// View Modes
 type ViewMode = 'LANDING' | 'ADMIN' | 'USER';
 
 export default function App() {
-  // --- Core Identity ---
-  const [isServer, setIsServer] = useState(false); // True if this client hosts the game logic
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false); // Persistent Admin Auth
+  const [isServer, setIsServer] = useState(false);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('LANDING');
-  
-  // Unique Client ID for this browser session (User)
+
   const myClientId = useRef(generateId()).current;
-  
-  // Admin Impersonation
+
   const [impersonateTeamId, setImpersonateTeamId] = useState<string | null>(null);
 
-  // --- Forms ---
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPwdInput, setAdminPwdInput] = useState('');
   const [setupConfig, setSetupConfig] = useState({ roomName: '전략기획실 A', maxTeams: 5 });
-  
+
   const [joinName, setJoinName] = useState('');
   const [joinGroup, setJoinGroup] = useState(1);
 
-  // --- Game State (Synced) ---
   const [gameState, setGameState] = useState<GameState>({
     phase: GamePhase.LOBBY,
     roomConfig: { roomName: '', maxTeams: 5 },
@@ -78,20 +70,18 @@ export default function App() {
   const bc = useRef<BroadcastChannel | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // --- Scroll Logs ---
   useEffect(() => {
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [gameState.logs]);
 
-  // --- Networking Setup ---
   useEffect(() => {
     bc.current = new BroadcastChannel(CHANNEL_NAME);
-    
+
     bc.current.onmessage = (event) => {
       const msg: NetworkMessage = event.data;
-      
+
       if (isServer) {
         handleServerMessage(msg);
       } else {
@@ -99,12 +89,11 @@ export default function App() {
       }
     };
 
-    // Handle user disconnect (close tab)
     const handleBeforeUnload = () => {
       if (!isServer && bc.current) {
-        bc.current.postMessage({ 
-          type: 'LEAVE_NOTIFY', 
-          payload: { clientId: myClientId } 
+        bc.current.postMessage({
+          type: 'LEAVE_NOTIFY',
+          payload: { clientId: myClientId }
         });
       }
     };
@@ -114,9 +103,8 @@ export default function App() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       bc.current?.close();
     };
-  }, [isServer]); // Re-bind when role changes
+  }, [isServer]);
 
-  // --- Server Logic (Run by Admin) ---
   const broadcastState = (newState: GameState) => {
     if (bc.current) {
       bc.current.postMessage({ type: 'STATE_UPDATE', payload: newState });
@@ -129,35 +117,30 @@ export default function App() {
       let nextState = { ...prev };
 
       if (msg.type === 'JOIN_REQUEST') {
-        // Find existing team for this group
         const existingTeamIndex = prev.teams.findIndex(t => t.groupNumber === msg.payload.group);
-        
+
         if (existingTeamIndex !== -1) {
-          // Team exists, add member
           const existingTeam = prev.teams[existingTeamIndex];
-          // Check if user already in team (idempotency)
           if (existingTeam.members.some(m => m.clientId === msg.payload.clientId)) return prev;
 
           const updatedTeam = {
             ...existingTeam,
             members: [...existingTeam.members, { clientId: msg.payload.clientId, name: msg.payload.name }]
           };
-          
+
           nextState.teams = [...prev.teams];
           nextState.teams[existingTeamIndex] = updatedTeam;
-          // Sort just in case
           nextState.teams.sort((a,b) => a.groupNumber - b.groupNumber);
-          
+
           nextState.logs = [...prev.logs, `[SYSTEM] '${msg.payload.name}' 님이 ${msg.payload.group}조에 합류했습니다.`];
           broadcastState(nextState);
           return nextState;
         } else {
-          // Create new team if maxTeams not reached
           if (prev.teams.length >= prev.roomConfig.maxTeams) return prev;
 
           const newTeam: Team = {
-            id: generateId(), // Team ID
-            name: `${msg.payload.name} (대표)`, // First user sets the name initially
+            id: generateId(),
+            name: `${msg.payload.name} (대표)`,
             groupNumber: msg.payload.group,
             chips: STARTING_CHIPS,
             cards: [],
@@ -165,7 +148,7 @@ export default function App() {
             lastAction: null,
             members: [{ clientId: msg.payload.clientId, name: msg.payload.name }]
           };
-          
+
           nextState.teams = [...prev.teams, newTeam].sort((a,b) => a.groupNumber - b.groupNumber);
           nextState.logs = [...prev.logs, `[SYSTEM] ${msg.payload.group}조 ('${newTeam.name}') 등록 완료.`];
           broadcastState(nextState);
@@ -178,7 +161,7 @@ export default function App() {
           ...t,
           members: t.members.filter(m => m.clientId !== msg.payload.clientId)
         }));
-        
+
         nextState = { ...prev, teams };
         broadcastState(nextState);
         return nextState;
@@ -187,14 +170,14 @@ export default function App() {
       if (msg.type === 'ACTION_PASS') {
         if (prev.phase !== GamePhase.PLAYING) return prev;
         const currentTeam = prev.teams[prev.currentTurnIndex];
-        if (currentTeam.id !== msg.payload.teamId) return prev; 
+        if (currentTeam.id !== msg.payload.teamId) return prev;
 
-        const updatedTeams = prev.teams.map(t => 
-          t.id === currentTeam.id 
-            ? { ...t, chips: t.chips - 1, score: calculateScore(t.cards, t.chips - 1), lastAction: 'PASS' as const } 
+        const updatedTeams = prev.teams.map(t =>
+          t.id === currentTeam.id
+            ? { ...t, chips: t.chips - 1, score: calculateScore(t.cards, t.chips - 1), lastAction: 'PASS' as const }
             : t
         );
-        
+
         nextState = {
           ...prev,
           pot: prev.pot + 1,
@@ -213,23 +196,23 @@ export default function App() {
 
         const takenCard = prev.currentCard!;
         const takenPot = prev.pot;
-        
+
         const newCards = [...currentTeam.cards, takenCard];
         const newChips = currentTeam.chips + takenPot;
         const newScore = calculateScore(newCards, newChips);
 
-        const updatedTeams = prev.teams.map(t => 
-          t.id === currentTeam.id 
-            ? { ...t, chips: newChips, cards: newCards, score: newScore, lastAction: 'TAKE' as const } 
+        const updatedTeams = prev.teams.map(t =>
+          t.id === currentTeam.id
+            ? { ...t, chips: newChips, cards: newCards, score: newScore, lastAction: 'TAKE' as const }
             : t
         );
 
         const logs = [...prev.logs, `[SUCCESS] ${currentTeam.groupNumber}조: ${takenCard}억 프로젝트 수주 (자원 +${takenPot}억)`];
-        
+
         const remainingDeck = [...prev.deck];
-        
+
         if (remainingDeck.length === 0) {
-           let minLoss = -Infinity; 
+           let minLoss = -Infinity;
            let winnerId = null;
            updatedTeams.forEach(t => {
              if (t.score > minLoss) {
@@ -252,7 +235,7 @@ export default function App() {
              currentCard: nextCard,
              pot: 0,
              teams: updatedTeams,
-             currentTurnIndex: prev.currentTurnIndex, 
+             currentTurnIndex: prev.currentTurnIndex,
              logs: [...logs, `[NEW] 신규 프로젝트 공시: ${nextCard}억`]
            };
         }
@@ -264,14 +247,12 @@ export default function App() {
     });
   };
 
-  // --- Client Logic ---
   const handleClientMessage = (msg: NetworkMessage) => {
     if (msg.type === 'STATE_UPDATE') {
       setGameState(msg.payload);
     }
   };
 
-  // Derive my team from state + clientId OR impersonation
   const myTeam = useMemo(() => {
     if (impersonateTeamId) {
       return gameState.teams.find(t => t.id === impersonateTeamId);
@@ -288,15 +269,14 @@ export default function App() {
       alert("이름을 입력해주세요.");
       return;
     }
-    
-    // Send Join Request
+
     if (bc.current) {
-      bc.current.postMessage({ 
-        type: 'JOIN_REQUEST', 
-        payload: { name: joinName, group: joinGroup, clientId: myClientId } 
+      bc.current.postMessage({
+        type: 'JOIN_REQUEST',
+        payload: { name: joinName, group: joinGroup, clientId: myClientId }
       });
     }
-    
+
     setViewMode('USER');
   };
 
@@ -306,16 +286,13 @@ export default function App() {
     }
   };
 
-  // --- Admin Functions ---
   const attemptAdminLogin = () => {
     if (adminPwdInput === ADMIN_PASSWORD) {
       setIsAdminAuthenticated(true);
       if (isServer) {
-          // Already running server, just go to view
           setViewMode('ADMIN');
           setShowAdminLogin(false);
       }
-      // Else stay in modal to create room
     } else {
       alert('접속 코드가 올바르지 않습니다.');
     }
@@ -327,11 +304,11 @@ export default function App() {
       return;
     }
 
-    setIsServer(true); // Become the Server
+    setIsServer(true);
     setIsAdminAuthenticated(true);
     setViewMode('ADMIN');
     setShowAdminLogin(false);
-    
+
     const newState: GameState = {
       phase: GamePhase.LOBBY,
       roomConfig: { roomName: setupConfig.roomName, maxTeams: setupConfig.maxTeams },
@@ -351,7 +328,7 @@ export default function App() {
     const fullDeck = createDeck();
     const hiddenCard = fullDeck.pop() || null;
     const firstCard = fullDeck.pop() || null;
-    
+
     const cleanTeams = gameState.teams.map(t => ({ ...t, lastAction: null }));
 
     const newState: GameState = {
@@ -365,8 +342,8 @@ export default function App() {
       currentTurnIndex: Math.floor(Math.random() * gameState.teams.length),
       logs: [
         ...gameState.logs,
-        '[SYSTEM] 입찰 시스템 가동 시작.', 
-        `[SYSTEM] 비공개 프로젝트(히든카드) 1건이 제외되었습니다.`, 
+        '[SYSTEM] 입찰 시스템 가동 시작.',
+        `[SYSTEM] 비공개 프로젝트(히든카드) 1건이 제외되었습니다.`,
         `[NEW] 첫번째 프로젝트 공시: ${firstCard}억`
       ],
       winnerId: null
@@ -402,194 +379,6 @@ export default function App() {
 
   // ---------------- RENDER ----------------
 
-  // 1. Landing Screen
-  if (viewMode === 'LANDING') {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-        {isServer && (
-          <div className="absolute top-0 left-0 w-full bg-red-900/80 text-white text-center text-xs py-1 z-50">
-            ⚠ 게임 서버가 백그라운드에서 실행 중입니다 ⚠
-          </div>
-        )}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black z-0"></div>
-        
-        {/* Top Right Admin Button */}
-        <div className="absolute top-4 right-4 z-20 flex gap-2">
-           {isAdminAuthenticated && (
-             <button 
-                onClick={() => setViewMode('ADMIN')}
-                className="flex items-center gap-2 text-white bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded-full text-xs font-bold shadow-lg shadow-blue-500/20"
-             >
-                <Monitor className="w-3 h-3" /> 관리자 뷰 입장
-             </button>
-           )}
-          <button 
-            onClick={() => { setShowAdminLogin(true); setAdminPwdInput(''); }}
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-400 transition-colors px-3 py-1 rounded-full border border-slate-800 hover:border-slate-600 bg-slate-950/50 backdrop-blur"
-          >
-            <Lock className="w-3 h-3" /> <span className="text-xs font-mono">{isAdminAuthenticated ? '관리자 설정' : '관리자 로그인'}</span>
-          </button>
-        </div>
-
-        <div className="z-10 text-center w-full max-w-sm mx-auto">
-          <div className="mb-4 inline-block border border-yellow-500/30 bg-yellow-500/10 px-4 py-1 rounded-full text-yellow-500 text-xs font-mono tracking-widest animate-pulse">
-             CORPORATE BIDDING SYSTEM
-          </div>
-          <h1 className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-slate-100 to-slate-500 mb-2 tracking-tighter">
-            MINUS<br/>AUCTION
-          </h1>
-          <p className="text-slate-500 text-sm font-light mb-12 tracking-wide">
-            마이너스 프로젝트 입찰 경쟁 시스템
-          </p>
-
-          {/* User Join Card (Mobile Optimized) */}
-          <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 p-6 rounded-2xl text-left shadow-2xl relative overflow-hidden w-full">
-             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-green-500"></div>
-             <div className="flex items-center gap-2 mb-6">
-                <Smartphone className="w-5 h-5 text-green-500" />
-                <h2 className="text-lg font-bold text-white">팀 접속 (참가자)</h2>
-             </div>
-             
-             {!gameState.roomConfig.roomName ? (
-                 <div className="text-center py-8 text-slate-500 text-sm">
-                    <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-50"/>
-                    <p>현재 개설된 게임방이 없습니다.</p>
-                    <p>관리자가 방을 만든 후 접속해주세요.</p>
-                 </div>
-             ) : (
-                 <div className="space-y-4">
-                   <div className="p-2 bg-slate-800 rounded border border-slate-700 mb-2">
-                      <span className="text-[10px] text-slate-400 block">현재 게임방</span>
-                      <span className="text-white font-bold">{gameState.roomConfig.roomName}</span>
-                   </div>
-
-                   <div>
-                      <label className="text-xs text-slate-400 block mb-1">참가 조 선택</label>
-                      <select 
-                        className="w-full bg-slate-950 border border-slate-700 p-3 rounded text-white focus:outline-none focus:border-green-500 appearance-none cursor-pointer"
-                        value={joinGroup}
-                        onChange={(e) => setJoinGroup(Number(e.target.value))}
-                      >
-                        {Array.from({ length: gameState.roomConfig.maxTeams }, (_, i) => i + 1).map(num => (
-                          <option key={num} value={num}>{num}조</option>
-                        ))}
-                      </select>
-                   </div>
-
-                   <div>
-                      <label className="text-xs text-slate-400 block mb-1">이름 (본인)</label>
-                      <input 
-                         type="text" 
-                         placeholder="이름 입력" 
-                         className="w-full bg-slate-950 border border-slate-700 p-3 rounded text-white focus:outline-none focus:border-green-500"
-                         value={joinName}
-                         onChange={(e) => setJoinName(e.target.value)}
-                         onKeyDown={(e) => e.key === 'Enter' && joinGame()}
-                       />
-                   </div>
-                   <button 
-                     onClick={joinGame}
-                     className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-all shadow-[0_4px_14px_0_rgba(34,197,94,0.39)] hover:shadow-[0_6px_20px_rgba(34,197,94,0.23)] active:scale-95 flex items-center justify-center gap-2"
-                   >
-                     접속하기 <Briefcase className="w-4 h-4" />
-                   </button>
-                 </div>
-             )}
-          </div>
-        </div>
-
-        {/* Admin Login/Setup Modal */}
-        {showAdminLogin && (
-          <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-             <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-sm shadow-2xl relative animate-in fade-in zoom-in duration-200">
-               <button 
-                 onClick={() => setShowAdminLogin(false)} 
-                 className="absolute top-4 right-4 text-slate-500 hover:text-white"
-               >
-                 <X className="w-5 h-5"/>
-               </button>
-
-               {!isAdminAuthenticated ? (
-                 <>
-                   <div className="flex items-center gap-2 mb-4 text-white font-bold">
-                     <Lock className="w-5 h-5 text-red-500"/> 관리자 인증
-                   </div>
-                   <div className="mb-4">
-                       <input 
-                         type="password" 
-                         placeholder="접속 코드 입력" 
-                         className="w-full bg-slate-950 border border-slate-700 p-3 rounded text-white font-mono focus:border-red-500 outline-none mb-2"
-                         value={adminPwdInput}
-                         onChange={(e) => setAdminPwdInput(e.target.value)}
-                       />
-                       <button 
-                         onClick={attemptAdminLogin}
-                         className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2 rounded mt-2"
-                       >
-                         인증 확인
-                       </button>
-                   </div>
-                 </>
-               ) : (
-                 // Authenticated
-                 <>
-                    <div className="flex items-center gap-2 mb-4 text-white font-bold">
-                        <Settings className="w-5 h-5 text-blue-500"/> 게임방 개설
-                    </div>
-                    
-                    {isServer ? (
-                        <div className="bg-blue-900/20 text-blue-200 p-3 rounded mb-4 text-sm">
-                            현재 방이 개설되어 있습니다.<br/>
-                            <strong>{gameState.roomConfig.roomName}</strong>
-                        </div>
-                    ) : (
-                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                            <label className="text-xs text-slate-400">게임방 이름</label>
-                            <input 
-                                type="text" 
-                                className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white mb-2"
-                                value={setupConfig.roomName}
-                                onChange={(e) => setSetupConfig({...setupConfig, roomName: e.target.value})}
-                            />
-                            <label className="text-xs text-slate-400">참가 팀 수 ({MIN_TEAMS}-{MAX_TEAMS_LIMIT})</label>
-                            <div className="flex items-center gap-3 mb-4">
-                                <input 
-                                type="range" 
-                                min={MIN_TEAMS} 
-                                max={MAX_TEAMS_LIMIT} 
-                                className="flex-1 accent-blue-500"
-                                value={setupConfig.maxTeams}
-                                onChange={(e) => setSetupConfig({...setupConfig, maxTeams: Number(e.target.value)})}
-                                />
-                                <span className="font-mono text-xl font-bold text-blue-400 w-8">{setupConfig.maxTeams}</span>
-                            </div>
-                            <button 
-                                onClick={createRoom}
-                                className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded font-bold shadow-lg"
-                            >
-                                게임방 생성 및 입장
-                            </button>
-                        </div>
-                    )}
-                    
-                    {isServer && (
-                         <button 
-                           onClick={() => { setViewMode('ADMIN'); setShowAdminLogin(false); }}
-                           className="w-full bg-slate-700 hover:bg-slate-600 text-white py-3 rounded font-bold mt-2"
-                         >
-                           관리자 뷰로 이동
-                         </button>
-                    )}
-                 </>
-               )}
-             </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Common Logs View
   const LogsView = () => (
     <div className="bg-black/40 border-l border-slate-800 flex flex-col h-full font-mono text-xs">
       <div className="p-3 border-b border-slate-800 text-slate-400 font-bold flex items-center gap-2 bg-slate-900/50">
@@ -609,11 +398,194 @@ export default function App() {
     </div>
   );
 
+  // 1. Landing Screen
+  if (viewMode === 'LANDING') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        {isServer && (
+          <div className="absolute top-0 left-0 w-full bg-red-900/80 text-white text-center text-xs py-1 z-50">
+            ⚠ 게임 서버가 백그라운드에서 실행 중입니다 ⚠
+          </div>
+        )}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black z-0"></div>
+
+        <div className="absolute top-4 right-4 z-20 flex gap-2">
+           {isAdminAuthenticated && (
+             <button
+                onClick={() => setViewMode('ADMIN')}
+                className="flex items-center gap-2 text-white bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded-full text-xs font-bold shadow-lg shadow-blue-500/20"
+             >
+                <Monitor className="w-3 h-3" /> 관리자 뷰 입장
+             </button>
+           )}
+          <button
+            onClick={() => { setShowAdminLogin(true); setAdminPwdInput(''); }}
+            className="flex items-center gap-2 text-slate-600 hover:text-slate-400 transition-colors px-3 py-1 rounded-full border border-slate-800 hover:border-slate-600 bg-slate-950/50 backdrop-blur"
+          >
+            <Lock className="w-3 h-3" /> <span className="text-xs font-mono">{isAdminAuthenticated ? '관리자 설정' : '관리자 로그인'}</span>
+          </button>
+        </div>
+
+        <div className="z-10 text-center w-full max-w-sm mx-auto">
+          <div className="mb-4 inline-block border border-yellow-500/30 bg-yellow-500/10 px-4 py-1 rounded-full text-yellow-500 text-xs font-mono tracking-widest animate-pulse">
+             CORPORATE BIDDING SYSTEM
+          </div>
+          <h1 className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-slate-100 to-slate-500 mb-2 tracking-tighter">
+            MINUS<br/>AUCTION
+          </h1>
+          <p className="text-slate-500 text-sm font-light mb-12 tracking-wide">
+            마이너스 프로젝트 입찰 경쟁 시스템
+          </p>
+
+          <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 p-6 rounded-2xl text-left shadow-2xl relative overflow-hidden w-full">
+             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-green-500"></div>
+             <div className="flex items-center gap-2 mb-6">
+                <Smartphone className="w-5 h-5 text-green-500" />
+                <h2 className="text-lg font-bold text-white">팀 접속 (참가자)</h2>
+             </div>
+
+             {!gameState.roomConfig.roomName ? (
+                 <div className="text-center py-8 text-slate-500 text-sm">
+                    <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-50"/>
+                    <p>현재 개설된 게임방이 없습니다.</p>
+                    <p>관리자가 방을 만든 후 접속해주세요.</p>
+                 </div>
+             ) : (
+                 <div className="space-y-4">
+                   <div className="p-2 bg-slate-800 rounded border border-slate-700 mb-2">
+                      <span className="text-[10px] text-slate-400 block">현재 게임방</span>
+                      <span className="text-white font-bold">{gameState.roomConfig.roomName}</span>
+                   </div>
+
+                   <div>
+                      <label className="text-xs text-slate-400 block mb-1">참가 조 선택</label>
+                      <select
+                        className="w-full bg-slate-950 border border-slate-700 p-3 rounded text-white focus:outline-none focus:border-green-500 appearance-none cursor-pointer"
+                        value={joinGroup}
+                        onChange={(e) => setJoinGroup(Number(e.target.value))}
+                      >
+                        {Array.from({ length: gameState.roomConfig.maxTeams }, (_, i) => i + 1).map(num => (
+                          <option key={num} value={num}>{num}조</option>
+                        ))}
+                      </select>
+                   </div>
+
+                   <div>
+                      <label className="text-xs text-slate-400 block mb-1">이름 (본인)</label>
+                      <input
+                         type="text"
+                         placeholder="이름 입력"
+                         className="w-full bg-slate-950 border border-slate-700 p-3 rounded text-white focus:outline-none focus:border-green-500"
+                         value={joinName}
+                         onChange={(e) => setJoinName(e.target.value)}
+                         onKeyDown={(e) => e.key === 'Enter' && joinGame()}
+                       />
+                   </div>
+                   <button
+                     onClick={joinGame}
+                     className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-all shadow-[0_4px_14px_0_rgba(34,197,94,0.39)] hover:shadow-[0_6px_20px_rgba(34,197,94,0.23)] active:scale-95 flex items-center justify-center gap-2"
+                   >
+                     접속하기 <Briefcase className="w-4 h-4" />
+                   </button>
+                 </div>
+             )}
+          </div>
+        </div>
+
+        {/* Admin Login/Setup Modal */}
+        {showAdminLogin && (
+          <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+             <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-sm shadow-2xl relative animate-in fade-in zoom-in duration-200">
+               <button
+                 onClick={() => setShowAdminLogin(false)}
+                 className="absolute top-4 right-4 text-slate-500 hover:text-white"
+               >
+                 <X className="w-5 h-5"/>
+               </button>
+
+               {!isAdminAuthenticated ? (
+                 <>
+                   <div className="flex items-center gap-2 mb-4 text-white font-bold">
+                     <Lock className="w-5 h-5 text-red-500"/> 관리자 인증
+                   </div>
+                   <div className="mb-4">
+                       <input
+                         type="password"
+                         placeholder="접속 코드 입력"
+                         className="w-full bg-slate-950 border border-slate-700 p-3 rounded text-white font-mono focus:border-red-500 outline-none mb-2"
+                         value={adminPwdInput}
+                         onChange={(e) => setAdminPwdInput(e.target.value)}
+                       />
+                       <button
+                         onClick={attemptAdminLogin}
+                         className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2 rounded mt-2"
+                       >
+                         인증 확인
+                       </button>
+                   </div>
+                 </>
+               ) : (
+                 <>
+                    <div className="flex items-center gap-2 mb-4 text-white font-bold">
+                        <Settings className="w-5 h-5 text-blue-500"/> 게임방 개설
+                    </div>
+
+                    {isServer ? (
+                        <div className="bg-blue-900/20 text-blue-200 p-3 rounded mb-4 text-sm">
+                            현재 방이 개설되어 있습니다.<br/>
+                            <strong>{gameState.roomConfig.roomName}</strong>
+                        </div>
+                    ) : (
+                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                            <label className="text-xs text-slate-400">게임방 이름</label>
+                            <input
+                                type="text"
+                                className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white mb-2"
+                                value={setupConfig.roomName}
+                                onChange={(e) => setSetupConfig({...setupConfig, roomName: e.target.value})}
+                            />
+                            <label className="text-xs text-slate-400">참가 팀 수 ({MIN_TEAMS}-{MAX_TEAMS_LIMIT})</label>
+                            <div className="flex items-center gap-3 mb-4">
+                                <input
+                                type="range"
+                                min={MIN_TEAMS}
+                                max={MAX_TEAMS_LIMIT}
+                                className="flex-1 accent-blue-500"
+                                value={setupConfig.maxTeams}
+                                onChange={(e) => setSetupConfig({...setupConfig, maxTeams: Number(e.target.value)})}
+                                />
+                                <span className="font-mono text-xl font-bold text-blue-400 w-8">{setupConfig.maxTeams}</span>
+                            </div>
+                            <button
+                                onClick={createRoom}
+                                className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded font-bold shadow-lg"
+                            >
+                                게임방 생성 및 입장
+                            </button>
+                        </div>
+                    )}
+
+                    {isServer && (
+                         <button
+                           onClick={() => { setViewMode('ADMIN'); setShowAdminLogin(false); }}
+                           className="w-full bg-slate-700 hover:bg-slate-600 text-white py-3 rounded font-bold mt-2"
+                         >
+                           관리자 뷰로 이동
+                         </button>
+                    )}
+                 </>
+               )}
+             </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // 2. Admin View
   if (viewMode === 'ADMIN') {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col h-screen overflow-hidden">
-        {/* Header */}
         <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 shrink-0 z-20">
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${gameState.phase === GamePhase.PLAYING ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
@@ -623,11 +595,11 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-4 text-sm font-mono text-slate-400">
-            <button 
+            <button
                 onClick={() => setViewMode('LANDING')}
                 className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-red-900/30 text-slate-300 hover:text-red-300 rounded border border-slate-700 transition-colors"
             >
-                <LogOut className="w-4 h-4" /> 
+                <LogOut className="w-4 h-4" />
                 <span className="hidden md:inline">나가기</span>
             </button>
             <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-slate-800 rounded">
@@ -637,12 +609,9 @@ export default function App() {
           </div>
         </header>
 
-        {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
-          
-          {/* Main Board */}
           <div className="flex-1 p-6 flex flex-col relative bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
-            
+
             {/* LOBBY STATE */}
             {gameState.phase === GamePhase.LOBBY && (
               <div className="flex-1 flex flex-col items-center justify-center">
@@ -659,31 +628,29 @@ export default function App() {
                          <span>참가 팀 대기 중...</span>
                       </div>
                    </div>
-                   
+
                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
                      {gameState.teams.map(team => {
                        const activeCount = team.members.length;
                        const isActive = activeCount > 0;
-                       
+
                        return (
-                         <div 
-                           key={team.id} 
+                         <div
+                           key={team.id}
                            className={`
                              p-4 rounded-lg flex flex-col items-start gap-2 relative overflow-hidden transition-all duration-300 group
-                             ${isActive 
-                               ? 'bg-slate-800 border-2 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)] scale-[1.02] z-10' 
+                             ${isActive
+                               ? 'bg-slate-800 border-2 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.15)] scale-[1.02] z-10'
                                : 'bg-slate-900 border border-slate-800 opacity-60 grayscale'
                              }
                            `}
                          >
-                           {/* Badge */}
                            {isActive && (
                              <div className="absolute top-0 right-0 bg-green-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-bl">
                                준비됨
                              </div>
                            )}
 
-                           {/* View As User Button (Hover) */}
                             <button
                                 onClick={() => switchToUserView(team.id)}
                                 className="absolute inset-0 bg-black/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
@@ -692,8 +659,7 @@ export default function App() {
                                     <Eye className="w-4 h-4" /> 사용자 뷰
                                 </span>
                             </button>
-                           
-                           {/* Team Name */}
+
                            <div className="flex flex-col w-full">
                               <span className="text-[10px] font-mono text-slate-500 block mb-1">{team.groupNumber}조</span>
                               <div className="flex items-center gap-2">
@@ -702,7 +668,6 @@ export default function App() {
                               </div>
                            </div>
 
-                           {/* Member Count & List */}
                            <div className={`
                              w-full rounded p-2 text-xs flex flex-col gap-1
                              ${isActive ? 'bg-black/20' : 'bg-transparent'}
@@ -715,7 +680,6 @@ export default function App() {
                                   {activeCount}명
                                 </span>
                               </div>
-                              {/* Show Member Names (Limit to 3) */}
                               {isActive && (
                                 <div className="mt-1 pt-1 border-t border-slate-700/50 text-[10px] text-slate-400 space-y-0.5">
                                    {team.members.slice(0, 3).map((m, idx) => (
@@ -730,8 +694,7 @@ export default function App() {
                          </div>
                        );
                      })}
-                     
-                     {/* Empty Slots */}
+
                      {Array.from({length: Math.max(0, gameState.roomConfig.maxTeams - gameState.teams.length)}).map((_, i) => (
                        <div key={i} className="bg-slate-900/30 p-4 rounded-lg border border-slate-800 border-dashed text-slate-700 flex flex-col items-center justify-center font-mono min-h-[120px]">
                          <span className="text-2xl opacity-20 mb-2">EMPTY</span>
@@ -741,12 +704,12 @@ export default function App() {
                    </div>
 
                    <div className="text-center">
-                     <button 
+                     <button
                        onClick={startGame}
                        disabled={gameState.teams.filter(t => t.members.length > 0).length < MIN_TEAMS}
                        className="px-8 py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded font-bold text-lg shadow-lg transition-all flex items-center gap-2 mx-auto"
                      >
-                       <Play className="fill-current"/> 
+                       <Play className="fill-current"/>
                        {gameState.teams.filter(t => t.members.length > 0).length < MIN_TEAMS ? `최소 ${MIN_TEAMS}팀 필요` : '경매 세션 시작'}
                      </button>
                      <p className="mt-4 text-slate-500 text-xs">
@@ -760,16 +723,14 @@ export default function App() {
             {/* PLAYING STATE */}
             {gameState.phase !== GamePhase.LOBBY && (
                <div className="flex-1 flex flex-col gap-6">
-                  {/* Teams Grid - Flexible Columns based on count */}
                   <div className={`grid gap-3 ${gameState.teams.length > 8 ? 'grid-cols-4 md:grid-cols-5 lg:grid-cols-6' : 'grid-cols-2 md:grid-cols-4'}`}>
                     {gameState.teams.map((team, idx) => (
                       <div key={team.id} className="relative group">
-                          <PlayerPanel 
-                            team={team} 
+                          <PlayerPanel
+                            team={team}
                             isActive={gameState.currentTurnIndex === idx && gameState.phase === GamePhase.PLAYING}
                             isWinner={gameState.winnerId === team.id}
                           />
-                          {/* Admin Overlay for Switching */}
                           <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button onClick={() => switchToUserView(team.id)} className="bg-black/50 hover:bg-black p-1 rounded text-white" title="사용자 뷰 보기">
                                   <Eye className="w-4 h-4" />
@@ -779,7 +740,6 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* Auction Center */}
                   <div className="flex-1 flex items-center justify-center relative my-4">
                      {gameState.phase === GamePhase.GAME_OVER ? (
                         <div className="text-center bg-slate-900/90 p-10 rounded-2xl border border-yellow-500/30 shadow-2xl backdrop-blur">
@@ -794,13 +754,11 @@ export default function App() {
                         </div>
                      ) : (
                        <div className="flex items-center gap-8 md:gap-16 scale-90 md:scale-110">
-                          {/* Current Project */}
                           <div className="relative group perspective-1000">
                             <div className="absolute -inset-4 bg-red-500/20 blur-xl rounded-full animate-pulse"></div>
                             <Card value={gameState.currentCard!} size="lg" className="z-10 shadow-2xl rotate-y-12" />
                           </div>
 
-                          {/* Info */}
                           <div className="flex flex-col gap-4 md:gap-8">
                              <div className="bg-slate-900 border border-slate-700 p-6 md:p-8 rounded-xl min-w-[200px] md:min-w-[240px] shadow-xl">
                                 <span className="text-slate-500 text-sm font-mono block mb-2 border-b border-slate-800 pb-1">프로젝트 지원금 (Pot)</span>
@@ -818,7 +776,6 @@ export default function App() {
                                 </div>
                              </div>
 
-                             {/* Turn Indicator */}
                              <div className="mt-2">
                                 <div className="text-slate-400 text-sm mb-2 font-mono">현재 입찰 진행 (BIDDER)</div>
                                 <div className="text-2xl md:text-3xl font-bold text-white bg-blue-600/20 border-l-4 border-blue-500 px-6 py-3 rounded-r animate-pulse">
@@ -833,7 +790,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Right Sidebar Logs */}
           <div className="w-80 h-full shrink-0 border-l border-slate-800 bg-slate-950 hidden xl:block">
             <LogsView />
           </div>
@@ -844,13 +800,9 @@ export default function App() {
 
   // 3. User View (Mobile Controller)
   if (viewMode === 'USER') {
-    
-    // Check if I am in a team
     const team = myTeam;
 
     if (!team) {
-       // Only show waiting screen if we REALLY can't find the team yet 
-       // AND we are not impersonating (Admin shouldn't see this unless invalid ID)
        return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-center">
            <div>
@@ -871,9 +823,8 @@ export default function App() {
 
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans relative">
-        {/* Admin Float Button */}
         {isAdminAuthenticated && (
-            <button 
+            <button
                 onClick={returnToAdminView}
                 className="fixed bottom-4 right-4 z-50 bg-blue-600 text-white p-3 rounded-full shadow-lg border border-blue-400"
             >
@@ -881,7 +832,6 @@ export default function App() {
             </button>
         )}
 
-        {/* Mobile Header */}
         <header className="bg-slate-900 p-4 border-b border-slate-800 flex justify-between items-center sticky top-0 z-40 shadow-md">
            <div>
              <div className="flex items-center gap-2">
@@ -900,7 +850,6 @@ export default function App() {
            </div>
         </header>
 
-        {/* Content */}
         <div className="flex-1 p-4 flex flex-col overflow-y-auto">
            {isLobby && (
              <div className="mb-4 bg-slate-800/80 border border-slate-700 p-4 rounded-lg flex items-center gap-4 animate-in slide-in-from-top-2">
@@ -941,10 +890,8 @@ export default function App() {
                 </div>
               </div>
            ) : (
-             // Playing UI (or Lobby Preview)
              <div className={`flex flex-col gap-6 pb-6 ${isLobby ? 'opacity-50 pointer-events-none grayscale-[0.5]' : ''}`}>
-               
-               {/* Current Status Box */}
+
                <div className="bg-slate-900/50 rounded-2xl p-5 border border-slate-700 shadow-lg relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-2 opacity-10">
                      <AlertTriangle className="w-24 h-24" />
@@ -968,9 +915,8 @@ export default function App() {
                   </div>
                </div>
 
-               {/* Action Buttons Area */}
                <div className="grid grid-cols-2 gap-4">
-                  <button 
+                  <button
                     onClick={() => sendAction('ACTION_PASS')}
                     disabled={!isMyTurn || (team.chips) <= 0}
                     className="group relative py-8 rounded-2xl bg-slate-800 border border-slate-600 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:active:scale-100 transition-all flex flex-col items-center justify-center gap-2 overflow-hidden"
@@ -979,8 +925,8 @@ export default function App() {
                     <span className="text-xl font-bold relative z-10">패스 (PASS)</span>
                     <span className="text-xs text-slate-400 relative z-10 bg-black/20 px-2 py-0.5 rounded">-1억 자원 지불</span>
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={() => sendAction('ACTION_TAKE')}
                     disabled={!isMyTurn}
                     className="group relative py-8 rounded-2xl bg-red-900/80 border border-red-600 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:active:scale-100 transition-all flex flex-col items-center justify-center gap-2 overflow-hidden"
@@ -990,8 +936,7 @@ export default function App() {
                     <span className="text-xs text-red-300 relative z-10 bg-black/20 px-2 py-0.5 rounded">현재 자원 모두 획득</span>
                   </button>
                </div>
-               
-               {/* Turn Status Notification */}
+
                {!isLobby && (
                    !isMyTurn ? (
                     <div className="text-center p-3 bg-slate-900/80 backdrop-blur rounded-lg border border-slate-800 text-slate-400 text-sm animate-pulse">
@@ -1004,7 +949,6 @@ export default function App() {
                     )
                )}
 
-               {/* My Portfolio */}
                <div className="mt-2">
                   <h3 className="text-xs text-slate-500 mb-3 font-mono border-b border-slate-800 pb-1">프로젝트 포트폴리오</h3>
                   <div className="bg-slate-900/50 rounded-xl p-4 min-h-[120px] flex flex-wrap gap-2 content-start border border-slate-800">

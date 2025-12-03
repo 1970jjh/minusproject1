@@ -1,4 +1,3 @@
-
 export enum GamePhase {
   LOBBY = 'LOBBY',
   PLAYING = 'PLAYING',
@@ -11,14 +10,14 @@ export interface TeamMember {
 }
 
 export interface Team {
-  id: string; // UUID or simple ID
-  name: string; // Team Name (Representative) or Group Name
-  groupNumber: number; // Selected Group Number (1-12)
-  chips: number; // Resources (1억 unit)
-  cards: number[]; // Projects taken
-  score: number; // Current Net Profit calculation
+  id: string;
+  name: string;
+  groupNumber: number;
+  chips: number;
+  cards: number[];
+  score: number;
   lastAction?: 'PASS' | 'TAKE' | null;
-  members: TeamMember[]; // List of connected users
+  members: TeamMember[];
 }
 
 export interface RoomConfig {
@@ -31,7 +30,7 @@ export interface GameState {
   roomConfig: RoomConfig;
   deck: number[];
   currentCard: number | null;
-  pot: number; // Resources on the current project
+  pot: number;
   hiddenCard: number | null;
   teams: Team[];
   currentTurnIndex: number;
@@ -39,22 +38,17 @@ export interface GameState {
   winnerId: string | null;
 }
 
-// Network Message Types for BroadcastChannel
-export type NetworkMessage = 
+export type NetworkMessage =
   | { type: 'STATE_UPDATE'; payload: GameState }
   | { type: 'JOIN_REQUEST'; payload: { name: string; group: number; clientId: string } }
   | { type: 'LEAVE_NOTIFY'; payload: { clientId: string } }
   | { type: 'ACTION_PASS'; payload: { teamId: string } }
   | { type: 'ACTION_TAKE'; payload: { teamId: string } }
-  | { type: 'ADMIN_START_GAME'; payload: {} }
-  | { type: 'ADMIN_RESET'; payload: {} };
+  | { type: 'ADMIN_START_GAME'; payload: object }
+  | { type: 'ADMIN_RESET'; payload: object };
 
 export const STARTING_CHIPS = 9;
-
-// Updated Rule: -50 to -26
 export const MIN_CARD = -50;
 export const MAX_CARD = -26;
-
-// Team constraints
 export const MIN_TEAMS = 3;
-export const MAX_TEAMS_LIMIT = 15; // Increased limit
+export const MAX_TEAMS_LIMIT = 15;
