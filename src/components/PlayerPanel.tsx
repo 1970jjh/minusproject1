@@ -1,4 +1,3 @@
-import React from 'react';
 import { Team } from '../types';
 import { Card } from './Card';
 import { Chip } from './Chip';
@@ -11,7 +10,6 @@ interface PlayerPanelProps {
 }
 
 export const PlayerPanel: React.FC<PlayerPanelProps> = ({ team, isActive, isWinner }) => {
-  // Sort cards
   const sortedCards = [...team.cards].sort((a, b) => a - b);
   const activeMembers = team.members.length;
 
@@ -25,7 +23,7 @@ export const PlayerPanel: React.FC<PlayerPanelProps> = ({ team, isActive, isWinn
     >
       {/* Header */}
       <div className={`
-        flex justify-between items-center p-2 border-b 
+        flex justify-between items-center p-2 border-b
         ${isActive ? 'bg-slate-800 border-yellow-500/50' : 'bg-slate-950 border-slate-800'}
       `}>
         <div className="flex items-center gap-2 overflow-hidden">
@@ -41,9 +39,8 @@ export const PlayerPanel: React.FC<PlayerPanelProps> = ({ team, isActive, isWinn
              </span>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
-           {/* Connection Status / Member Count */}
            <div className="flex items-center gap-1 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
               <Users className="w-2.5 h-2.5 text-slate-500" />
               <span className={`text-[10px] font-mono ${activeMembers > 0 ? 'text-green-500' : 'text-slate-600'}`}>{activeMembers}</span>
@@ -88,7 +85,7 @@ export const PlayerPanel: React.FC<PlayerPanelProps> = ({ team, isActive, isWinn
           <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
         </div>
       )}
-      
+
       {/* Action Status Overlay */}
       {team.lastAction && !isActive && (
          <div className={`

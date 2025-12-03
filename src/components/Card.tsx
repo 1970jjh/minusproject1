@@ -1,4 +1,3 @@
-import React from 'react';
 import { Briefcase, AlertOctagon } from 'lucide-react';
 
 interface CardProps {
@@ -6,7 +5,6 @@ interface CardProps {
   size?: 'sm' | 'md' | 'lg';
   hidden?: boolean;
   className?: string;
-  isNew?: boolean;
 }
 
 export const Card: React.FC<CardProps> = ({ value, size = 'md', hidden = false, className = '' }) => {
@@ -31,7 +29,7 @@ export const Card: React.FC<CardProps> = ({ value, size = 'md', hidden = false, 
   return (
     <div
       className={`
-        ${sizeClasses[size]} 
+        ${sizeClasses[size]}
         bg-slate-900 text-slate-100
         rounded-sm flex flex-col shadow-[0_0_15px_rgba(0,0,0,0.5)] select-none relative overflow-hidden
         border-slate-600
@@ -61,7 +59,7 @@ export const Card: React.FC<CardProps> = ({ value, size = 'md', hidden = false, 
       </div>
 
       {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-10 pointer-events-none" 
+      <div className="absolute inset-0 opacity-10 pointer-events-none"
            style={{ backgroundImage: 'linear-gradient(0deg, transparent 24%, #ffffff 25%, #ffffff 26%, transparent 27%, transparent 74%, #ffffff 75%, #ffffff 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, #ffffff 25%, #ffffff 26%, transparent 27%, transparent 74%, #ffffff 75%, #ffffff 76%, transparent 77%, transparent)', backgroundSize: '20px 20px' }}>
       </div>
     </div>
